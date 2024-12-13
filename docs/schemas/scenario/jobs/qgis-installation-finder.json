@@ -5,7 +5,6 @@
   "title": "QGIS installation finder",
   "type": "object",
   "items": {
-    "type": "object",
     "properties": {
       "version_priority": {
         "default": "",
