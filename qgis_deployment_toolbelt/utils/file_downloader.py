@@ -9,8 +9,10 @@
 import logging
 import ssl
 import warnings
+import xml.etree.ElementTree as ET
 from os import getenv
 from pathlib import Path
+from urllib.parse import unquote
 
 # 3rd party
 import truststore
@@ -181,3 +183,112 @@ def download_remote_file_to_local(
         raise error
 
     return local_file_path
+
+
+def download_xml_to_dict(
+    remote_url_to_download: str,
+    user_agent: str = f"{__title_clean__}/{__version__}",
+    content_type: str | None = None,
+    timeout: tuple[int, int] = (800, 800),
+) -> dict[str, dict[str, str]]:
+    """Download xml plugin repository.
+
+    Args:
+        remote_url_to_download (str): remote url of xml plugin repository
+        user_agent (str, optional): user agent to use to perform the request. Defaults \
+            to f"{__title_clean__}/{__version__}".
+        content_type (str | None, optional): HTTP content-type. Defaults to None.
+        timeout (tuple[int, int], optional): custom timeout (request, response). \
+            Defaults to (800, 800).
+
+    Returns:
+        dict[str, dict[str, str]]: _description_
+    """
+    # headers
+    headers = {"User-Agent": user_agent}
+    if content_type:
+        headers["Accept"] = content_type
+
+    try:
+        with Session() as dl_session:
+            dl_session.headers.update(headers)
+            dl_session.proxies.update(
+                get_proxy_settings(url=requote_uri(remote_url_to_download))
+            )
+            dl_session.verify = str2bool(getenv("QDT_SSL_VERIFY", True))
+
+            # handle local system certificates store
+            if str2bool(getenv("QDT_SSL_USE_SYSTEM_STORES", False)):
+                logger.debug(
+                    "Option to use native system certificates stores is enabled."
+                )
+                dl_session.mount("https://", TruststoreAdapter())
+
+            with dl_session.get(
+                url=requote_uri(remote_url_to_download),
+                timeout=timeout,
+            ) as req:
+                req.raise_for_status()
+                root = ET.fromstring(req.content)
+
+                plugins_info = {}
+                for plugin in root.findall("pyqgis_plugin"):
+                    plugin_id = plugin.attrib.get("plugin_id", "")
+                    name = plugin.attrib.get("name", "")
+                    version = plugin.attrib.get("version", "")
+                    elem = plugin.find("download_url")
+                    download_url = unquote(elem.text) if elem is not None else ""
+
+                    if not (
+                        all([plugin_id, version, download_url])
+                        or all([name, version, download_url])
+                    ):
+                        continue
+
+                    plugins_info.setdefault((plugin_id, name), {})[
+                        version
+                    ] = download_url
+    except HTTPError as error:
+        logger.error(
+            f"Downloading {remote_url_to_download} failed. "
+            f"Cause: HTTPError. Trace: {error}."
+        )
+        if isinstance(req, Response):
+            http_error_details = {
+                "status": req.status_code,
+                "headers": req.headers,
+                "body": req.content,
+            }
+            logger.error(
+                f"Addtional details grabbed from HTTP response: {http_error_details}"
+            )
+
+        raise error
+    except ConnectionError as error:
+        logger.error(
+            f"Downloading {remote_url_to_download} failed. "
+            f"Cause: ConnectionError. Trace: {error}"
+        )
+        raise error
+    except Exception as error:
+        logger.error(
+            f"Downloading {remote_url_to_download} failed. "
+            f"Cause: Unknown error. Trace: {error}",
+            stack_info=True,
+        )
+        raise error
+
+    return plugins_info
+
+
+# #############################################################################
+# ##### Stand alone program ########
+# ##################################
+
+if __name__ == "__main__":
+    """Standalone execution."""
+    repository = download_xml_to_dict(
+        remote_url_to_download="https://plugins.qgis.nicodet.fr/",
+        content_type="text/html,application/xhtml+xml,application/xml",
+    )
+    print(repository)

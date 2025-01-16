@@ -29,6 +29,7 @@ from packaging.version import InvalidVersion, Version
 
 # package
 from qgis_deployment_toolbelt.utils.check_path import check_path
+from qgis_deployment_toolbelt.utils.file_downloader import download_xml_to_dict
 from qgis_deployment_toolbelt.utils.slugger import sluggy
 
 # #############################################################################
@@ -111,6 +112,39 @@ class QgisPlugin:
             )
             input_dict["repository_url_xml"] = cls.OFFICIAL_REPOSITORY_XML
             input_dict["location"] = "remote"
+        elif input_dict.get("official_repository") is False and not input_dict.get(
+            "url"
+        ):
+            plugin_id = input_dict.get("plugin_id")
+            plugin_name = input_dict.get("name")
+            plugin_version = input_dict.get("version")
+            if not input_dict.get("repository_url_xml"):
+                pass
+            if not plugin_id and not plugin_name:
+                pass
+            if not plugin_version:
+                pass
+
+            repository = download_xml_to_dict(
+                remote_url_to_download=input_dict["repository_url_xml"],
+                content_type="text/html,application/xhtml+xml,application/xml",
+            )
+
+            if (
+                plugin_id
+                and plugin_name
+                and (plugin_id, plugin_name) in repository.keys()
+            ):
+                input_dict["url"] = repository[(plugin_id, plugin_name)].get(
+                    plugin_version
+                )
+            elif plugin_id or plugin_name:
+                for key in repository.keys():
+                    key_id, key_name = key
+                    if (plugin_id and key_id == plugin_id) or (
+                        plugin_name and key_name == plugin_name
+                    ):
+                        input_dict["url"] = repository[key].get(plugin_version)
 
         # remove keys which are not in object attributes
         attributes_names = [f.name for f in fields(cls)]
@@ -200,7 +234,7 @@ class QgisPlugin:
             str: download URL
         """
         if self.url:
-            return quote(self.url, safe="/:")
+            return quote(self.url, safe="/:=?")
         elif self.repository_url_xml and self.folder_name and self.version:
             split_url = urlsplit(self.repository_url_xml)
             new_url = split_url._replace(path=split_url.path.replace("plugins.xml", ""))
