@@ -4,7 +4,7 @@
   </a>
 </div>
 
-# QGIS Deployment Toolbelt (QDT)
+# QGIS Deployment Toolbelt (QDT) YEAHHHHHHHHH
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![flake8](https://img.shields.io/badge/linter-flake8-green)](https://flake8.pycqa.org/)
