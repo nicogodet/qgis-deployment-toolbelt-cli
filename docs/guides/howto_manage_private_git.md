@@ -1,4 +1,4 @@
-# How to make QDT work with a private Git repository
+# How to make QDT work with a private Git repository YEAHHHHHHH
 
 For now, QDT does not support private Git repositories. It's a "to be funded" issue. If you'd like to see this feature included in our functional scope, please don't hesitate to get in touch!
 
